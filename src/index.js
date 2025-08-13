@@ -1,82 +1,115 @@
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
-const {execSync} = require('child_process');
-var args = process.argv;
-args = args.filter((f,i)=>{return i > 1});
-var rerun = false;
-var time = 100;
-var iterations = 0;
-if(args.includes('-r')||args.includes('--rerun')){
+import {
+    writeFileSync,
+    existsSync,
+    readFileSync,
+    rmSync,
+    readdirSync,
+    statSync,
+} from 'fs';
+import { platform, homedir } from 'os';
+import { join } from 'path';
+import { execSync } from 'child_process';
+const args = process.argv.filter((_, i) => {
+    return i > 1;
+});
+let rerun = false;
+let time = 100;
+let iterations = 0;
+if (args.includes('-r') || args.includes('--rerun')) {
     rerun = true;
 }
-if((args.includes('-t') && args.length+1 > args.indexOf('-t'))||(args.includes('--time') && args.length+1 > args.indexOf('--time'))){
-    time = Number(args[args.indexOf(((args.includes('-t') && args.length+1 > args.indexOf('-t')) ? '-t' : '--time'))+1]);
-    if(time == NaN){
+if (
+    (args.includes('-t') && args.length + 1 > args.indexOf('-t')) ||
+    (args.includes('--time') && args.length + 1 > args.indexOf('--time'))
+) {
+    time = Number(
+        args[
+            args.indexOf(
+                args.includes('-t') && args.length + 1 > args.indexOf('-t')
+                    ? '-t'
+                    : '--time'
+            ) + 1
+        ]
+    );
+    if (time === NaN) {
         time = 100;
     }
 }
-if(args.includes('--set-default')||args.includes('-s')){
-    fs.writeFileSync(path.join(__dirname, 'config.json'),JSON.stringify({
-        rerun: rerun,
-        time: time,
-    }));
+if (args.includes('--set-default') || args.includes('-s')) {
+    writeFileSync(
+        join(import.meta.dirname, 'config.json'),
+        JSON.stringify({
+            rerun: rerun,
+            time: time,
+        })
+    );
 }
-if(args.length == 0 && fs.existsSync(path.join(__dirname,'config.json'))){
-    rerun = JSON.parse(fs.readFileSync(path.join(__dirname,'config.json'),'utf-8')).rerun;
-    time = JSON.parse(fs.readFileSync(path.join(__dirname,'config.json'),'utf-8')).time;
+
+if (args.length === 0 && existsSync(join(import.meta.dirname, 'config.json'))) {
+    ({ time, rerun } = JSON.parse(
+        readFileSync(join(import.meta.dirname, 'config.json'), 'utf-8')
+    ));
 }
-if(args.includes('-o')||args.includes('--original-default')){
+if (args.includes('-o') || args.includes('--original-default')) {
     rerun = false;
     time = 100;
 }
-if (os.platform() === 'win32') {
-    var arcPath = `${os.homedir()}\\AppData\\Local\\Packages\\TheBrowserCompany.Arc_ttt1ap7aakyb4\\LocalCache\\Local\\firestore\\Arc`;
-    if (fs.existsSync(arcPath)) {
-        console.log("Starting FixArc service...");
+if (platform() === 'win32') {
+    const arc_path = `${homedir()}\\AppData\\Local\\Packages\\TheBrowserCompany.Arc_ttt1ap7aakyb4\\LocalCache\\Local\\firestore\\Arc`;
+    if (existsSync(arc_path)) {
+        console.log('Starting FixArc service...');
         setInterval(() => {
-            if(iterations == 0){
-                console.log("FixArc successfully started!");
+            if (iterations === 0) {
+                console.log('FixArc successfully started!');
             }
-            if((!isProcessRunning("Arc.exe")) && rerun == true){
-                execSync("start arc.exe");
+            if (!is_process_running('Arc.exe') && rerun) {
+                execSync('start arc.exe');
             }
-            if (fs.existsSync(arcPath)) {
+            if (existsSync(arc_path)) {
                 try {
-                    fs.rmSync(arcPath, {
-                        recursive: true
+                    rmSync(arc_path, {
+                        recursive: true,
                     });
                 } catch (err) {
-                    var directory = fs.readdirSync(arcPath, {
-                        recursive: true
+                    const directory = readdirSync(arc_path, {
+                        recursive: true,
                     });
-                    directory.forEach((file) => {
-                        try {
-                            if (fs.existsSync(path.join(arcPath, file))) {
-                                fs.rmSync(path.join(arcPath, file), (fs.statSync(path.join(arcPath, file)).isDirectory ? {
-                                    recursive: true
-                                } : undefined));
-                            }
-                        } catch (err) {
-
+                    for (const file of directory) {
+                        const path = join(arc_path, file);
+                        if (!existsSync(path)) {
+                            continue;
                         }
-                    })
+                        const is_directory = statSync(path).isDirectory;
+                        try {
+                            rmSync(
+                                path,
+                                is_directory ? { recursive: true } : undefined
+                            );
+                        } catch {}
+                    }
                 }
             }
             iterations++;
-        }, (time));
+        }, time);
     } else {
-        throw new Error("You do not appear to have Arc installed.");
+        throw new Error('You do not appear to have Arc installed.');
     }
 } else {
-    throw new Error("This script only works on Windows.");
+    throw new Error('This script only works on Windows.');
 }
-function isProcessRunning(processName) {
+
+/**
+ * @param {string} process_name
+ * @returns {boolean}
+ */
+function is_process_running(process_name) {
     try {
-        const output = execSync(`tasklist /FI "IMAGENAME eq ${processName}"`, { encoding: 'utf8' });
-        return output.includes(processName);
-    } catch (error) {
-        console.error('Error checking process:', error.message);
+        const output = execSync(`tasklist /FI "IMAGENAME eq ${process_name}"`, {
+            encoding: 'utf8',
+        });
+        return output.includes(process_name);
+    } catch (err) {
+        console.error('Error checking process:', err.message);
         return false;
     }
 }
